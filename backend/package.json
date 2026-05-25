@@ -1,0 +1,32 @@
+{
+  "name": "forza-telemetry-backend",
+  "version": "1.0.0",
+  "description": "Forza Horizon 6 Telemetry UDP Receiver and WebSocket Broadcast Server",
+  "main": "dist/server.js",
+  "bin": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "mock": "tsx src/mockSender.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.11.24",
+    "@types/ws": "^8.5.10",
+    "pkg": "^5.8.1",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.3.1"
+  },
+  "pkg": {
+    "assets": [
+      "public/**/*"
+    ]
+  }
+}
