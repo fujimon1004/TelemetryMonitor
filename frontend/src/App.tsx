@@ -11,9 +11,10 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { AnalogMeter } from "./components/AnalogMeter";
+import { calculateTractionPosition } from "./utils/traction";
 
 // テレメトリデータのインターフェース定義
-interface TelemetryData {
+export interface TelemetryData {
   isRaceOn: number;
   timestampMs: number;
   engineMaxRpm: number;
@@ -128,11 +129,21 @@ function formatTime(seconds: number): string {
     .padStart(3, "0")}`;
 }
 
+import { ShiftLightBar } from "./components/ShiftLightBar";
+import { TraceGraph } from "./components/TraceGraph";
+import { TrackMap } from "./components/TrackMap";
+import { useTelemetryHistory } from "./hooks/useTelemetryHistory";
+
+export type DashboardMode = "SETUP" | "QUALIFY" | "RACE";
+
 export default function App() {
   const [telemetry, setTelemetry] = useState<TelemetryData>(initialTelemetry);
   const [isConnected, setIsConnected] = useState(false);
   const [isAnalogMode, setIsAnalogMode] = useState(true);
+  const [activeMode, setActiveMode] = useState<DashboardMode>("SETUP");
   const wsRef = useRef<WebSocket | null>(null);
+
+  const { traceHistory, mapPoints } = useTelemetryHistory(telemetry);
 
   // WebSocket 接続・自動再接続
   useEffect(() => {
@@ -218,6 +229,20 @@ export default function App() {
     return "#ff3333"; // オーバーヒート（赤）
   };
 
+  // タイヤコンディション用クラス
+  const getTireClasses = (position: 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight'): string => {
+    let classes = "tireVisual";
+    if (telemetry.wheelInPuddle[position] > 0) classes += " puddle";
+    if (telemetry.wheelOnRumbleStrip[position] > 0) classes += " rumble";
+    
+    const slipRatio = Math.abs(telemetry.tireSlipRatio[position] || 0);
+    const slipAngle = Math.abs(telemetry.tireSlipAngle[position] || 0);
+    if (slipRatio > 1.0 || slipAngle > 1.0) classes += " severe-slip";
+    else if (slipRatio > 0.5 || slipAngle > 0.5) classes += " slip";
+    
+    return classes;
+  };
+
   // タコメーター円弧の長さ計算
   // 半径160の円弧 (270度分)。円周 2 * PI * 160 = 1005.3。270度 = 753.98。
   const r = 160;
@@ -254,11 +279,33 @@ export default function App() {
   // 出力の馬力換算 (Watts -> HP)
   const horsepower = Math.round(telemetry.power / 745.7);
 
+  // 各輪のトラクション（スリップ）データを計算
+  const flTraction = calculateTractionPosition(
+    telemetry.tireSlipAngle.frontLeft,
+    telemetry.tireSlipRatio.frontLeft,
+    telemetry.tireCombinedSlip.frontLeft
+  );
+  const frTraction = calculateTractionPosition(
+    telemetry.tireSlipAngle.frontRight,
+    telemetry.tireSlipRatio.frontRight,
+    telemetry.tireCombinedSlip.frontRight
+  );
+  const rlTraction = calculateTractionPosition(
+    telemetry.tireSlipAngle.rearLeft,
+    telemetry.tireSlipRatio.rearLeft,
+    telemetry.tireCombinedSlip.rearLeft
+  );
+  const rrTraction = calculateTractionPosition(
+    telemetry.tireSlipAngle.rearRight,
+    telemetry.tireSlipRatio.rearRight,
+    telemetry.tireCombinedSlip.rearRight
+  );
+
   return (
     <div className="dashboardContainer">
       {/* 1. Header Panel */}
       <header className="panel headerPanel">
-        <div className="titleSection">
+        <div className="titleSection" style={{ flex: 1 }}>
           <h1>FORZA HORIZON 6</h1>
           <div className="statusIndicator">
             <span className={`statusDot ${isConnected ? "connected" : "disconnected"}`} />
@@ -276,7 +323,33 @@ export default function App() {
           </div>
         </div>
 
-        <div className="viewToggle" style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "auto", marginRight: "16px" }}>
+        <div className="modeTabsContainer" style={{ flex: 1, display: "flex", justifyContent: "center" }}>
+          <div className="modeTabs" style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: "8px", padding: "4px" }}>
+            {(["QUALIFY", "RACE", "SETUP"] as DashboardMode[]).map(mode => (
+              <button 
+                key={mode}
+                onClick={() => setActiveMode(mode)}
+                style={{
+                  background: activeMode === mode ? "rgba(255,255,255,0.1)" : "transparent",
+                  border: "none",
+                  color: activeMode === mode ? "var(--color-neon-cyan)" : "var(--color-text-muted)",
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: "12px",
+                  padding: "6px 20px",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: activeMode === mode ? "0 0 10px rgba(0, 229, 255, 0.2)" : "none"
+                }}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="viewToggle" style={{ flex: 1, display: "flex", gap: "8px", alignItems: "center", justifyContent: "flex-end" }}>
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "11px", color: isAnalogMode ? "var(--color-text-muted)" : "var(--color-neon-cyan)" }}>DIGITAL</span>
           <button 
             onClick={() => setIsAnalogMode(!isAnalogMode)}
@@ -322,7 +395,9 @@ export default function App() {
       </header>
 
       {/* 2. Main Grid */}
-      <main className="dashboardGrid">
+      {activeMode === "SETUP" && (
+        <>
+          <main className="dashboardGrid">
         {/* Left Section - Inputs & Laps */}
         <section className="leftPanel">
           {/* Race Laps / Times */}
@@ -416,41 +491,69 @@ export default function App() {
                 <span className="pedalValue">{Math.round((telemetry.handBrake / 255) * 100)}%</span>
               </div>
             </div>
+
+            {/* Steering */}
+            <div className="steeringContainer">
+              <div className="steeringHeader">
+                <span className="steeringLabel">STEER</span>
+                <span className="steeringValue">{Math.round((telemetry.steer / 127) * 100)}%</span>
+              </div>
+              <div className="steeringTrack">
+                <div 
+                  className="steeringFill" 
+                  style={{ 
+                    left: telemetry.steer < 0 ? `${50 + (telemetry.steer / 127) * 50}%` : "50%",
+                    width: `${Math.abs(telemetry.steer / 127) * 50}%`,
+                    backgroundColor: "var(--color-neon-cyan)"
+                  }} 
+                />
+                <div className="steeringCenterMark" />
+              </div>
+            </div>
           </div>
         </section>
 
         {/* Center Section - Gauges */}
         <section className="panel centerPanel">
+          <div style={{ width: "240px", height: "16px", margin: "0 auto", marginBottom: "16px" }}>
+            <ShiftLightBar rpm={telemetry.currentEngineRpm} maxRpm={telemetry.engineMaxRpm || 8000} gear={telemetry.gear} />
+          </div>
           {isAnalogMode ? (
-            <div className="analogMetersWrapper" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", width: "100%", flexGrow: 1 }}>
-              <AnalogMeter 
-                value={telemetry.speedKmh} 
-                min={0} max={400} 
-                label="SPEED" unit="km/h" 
-                majorTickStep={50} minorTickCount={4} 
-                size={220} 
-                accentColor="var(--color-neon-cyan)"
-              />
-              <AnalogMeter 
-                value={telemetry.currentEngineRpm} 
-                min={0} max={Math.max(telemetry.engineMaxRpm, 8000)} 
-                label="RPM" unit={`GEAR: ${getGearLabel(telemetry.gear)}`} 
-                majorTickStep={1000} minorTickCount={1} 
-                warningValue={telemetry.engineMaxRpm * 0.85}
-                dangerValue={telemetry.engineMaxRpm * 0.95}
-                size={340} 
-                accentColor="var(--color-neon-magenta)"
-                valueFormatter={(v) => v / 1000}
-              />
-              <AnalogMeter 
-                value={telemetry.boost} 
-                min={-15} max={30} 
-                label="BOOST" unit="PSI" 
-                majorTickStep={10} minorTickCount={1} 
-                warningValue={20}
-                size={220} 
-                accentColor="var(--color-neon-orange)"
-              />
+            <div className="analogMetersWrapper" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "2%", width: "100%", flexGrow: 1 }}>
+              <div style={{ flex: 1 }}>
+                <AnalogMeter 
+                  value={telemetry.speedKmh} 
+                  min={0} max={400} 
+                  label="SPEED" unit="km/h" 
+                  majorTickStep={50} minorTickCount={4} 
+                  size={180} 
+                  accentColor="var(--color-neon-cyan)"
+                />
+              </div>
+              <div style={{ flex: 1.5 }}>
+                <AnalogMeter 
+                  value={telemetry.currentEngineRpm} 
+                  min={0} max={Math.max(telemetry.engineMaxRpm, 8000)} 
+                  label="RPM" unit={`GEAR: ${getGearLabel(telemetry.gear)}`} 
+                  majorTickStep={1000} minorTickCount={1} 
+                  warningValue={telemetry.engineMaxRpm * 0.85}
+                  dangerValue={telemetry.engineMaxRpm * 0.95}
+                  size={260} 
+                  accentColor="var(--color-neon-magenta)"
+                  valueFormatter={(v) => v / 1000}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <AnalogMeter 
+                  value={telemetry.boost} 
+                  min={-15} max={30} 
+                  label="BOOST" unit="PSI" 
+                  majorTickStep={10} minorTickCount={1} 
+                  warningValue={20}
+                  size={180} 
+                  accentColor="var(--color-neon-orange)"
+                />
+              </div>
             </div>
           ) : (
             <div className="gaugeContainer">
@@ -532,12 +635,11 @@ export default function App() {
           </div>
         </section>
 
-        {/* Right Section - G-Force & Thermals */}
         <section className="rightPanel">
           {/* G-Force Card */}
           <div className="panel">
             <h2 className="metaLabel" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", marginBottom: "8px" }}>
-              <TrendingUp size={14} /> G-FORCE
+              <TrendingUp size={14} /> G-FORCE & ATTITUDE
             </h2>
             <div className="gforceContainer">
               <div className="gforceGrid">
@@ -565,6 +667,34 @@ export default function App() {
                 <span>LNG: <strong style={{ color: "var(--color-neon-orange)" }}>{gForceZ.toFixed(2)}G</strong></span>
               </div>
             </div>
+
+            {/* Attitude Indicator (Pitch/Roll) */}
+            <div className="attitudeContainer" style={{ marginTop: "16px", padding: "12px", background: "rgba(255,255,255,0.02)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <h3 style={{ fontSize: "10px", color: "var(--color-text-muted)", marginBottom: "8px", display: "flex", justifyContent: "space-between" }}>
+                <span>PITCH / ROLL</span>
+                <span>YAW: {Math.round(telemetry.yawPitchRoll.yaw * (180 / Math.PI))}°</span>
+              </h3>
+              <div className="attitudeHorizon" style={{ 
+                height: "60px", 
+                borderRadius: "4px", 
+                overflow: "hidden", 
+                position: "relative",
+                background: "linear-gradient(to bottom, #1e88e5 50%, #8d6e63 50%)",
+                transform: `rotate(${telemetry.yawPitchRoll.roll * (180 / Math.PI)}deg)`
+              }}>
+                <div style={{
+                  position: "absolute",
+                  left: 0, right: 0,
+                  top: `calc(50% + ${telemetry.yawPitchRoll.pitch * (180 / Math.PI) * 2}px)`,
+                  height: "2px",
+                  background: "#fff",
+                  boxShadow: "0 0 5px rgba(0,0,0,0.5)"
+                }} />
+                {/* Center crosshair */}
+                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "20px", height: "20px", border: "2px solid #ffeb3b", borderRadius: "50%", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "40px", height: "2px", background: "#ffeb3b", pointerEvents: "none" }} />
+              </div>
+            </div>
           </div>
 
           {/* Tire Thermal Diagram & Suspension Travel */}
@@ -577,83 +707,212 @@ export default function App() {
               <div className="carGrid">
                 {/* Front Left */}
                 <div className="tireBox">
-                  <div className="tireAndSuspension">
-                    <div className="suspensionBarContainer">
+                  <div className="tireGraphics">
+                    <div className="tireAndSuspension">
+                      <div className="suspensionBarContainer">
+                        <div 
+                          className="suspensionFill"
+                          style={{ height: `${Math.min(Math.max(telemetry.normSuspensionTravel.frontLeft * 100, 0), 100)}%` }}
+                        />
+                      </div>
                       <div 
-                        className="suspensionFill"
-                        style={{ height: `${Math.min(Math.max(telemetry.normSuspensionTravel.frontLeft * 100, 0), 100)}%` }}
+                        className={getTireClasses('frontLeft')} 
+                        style={{ backgroundColor: getTireTempColor(telemetry.tireTemp.frontLeft) }} 
                       />
+                      <div className="rumbleBarContainer">
+                        <div className="rumbleFill" style={{ height: `${Math.min(telemetry.surfaceRumble.frontLeft * 50, 100)}%` }} />
+                      </div>
                     </div>
-                    <div 
-                      className="tireVisual" 
-                      style={{ backgroundColor: getTireTempColor(telemetry.tireTemp.frontLeft) }} 
-                    />
+                    {/* 摩擦円 (トラクションサークル) */}
+                    <div className="tractionCircleContainer">
+                      <svg viewBox="0 0 100 100" className="tractionCircleSvg">
+                        <line x1="10" y1="50" x2="90" y2="50" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+                        <line x1="50" y1="10" x2="50" y2="90" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+                        <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeDasharray="3 3" />
+                        <circle cx={flTraction.x} cy={flTraction.y} r="6" className={`tractionDot ${flTraction.colorState}`} />
+                      </svg>
+                    </div>
                   </div>
-                  <span className="tireTempVal">{Math.round(telemetry.tireTemp.frontLeft)}°C</span>
-                  <span className="suspTravelVal">SUSP {Math.round(telemetry.normSuspensionTravel.frontLeft * 100)}%</span>
+                  <div className="tireStats">
+                    <span className="tireTempVal">{Math.round(telemetry.tireTemp.frontLeft)}°C</span>
+                    <span className="suspTravelVal">SUSP {Math.round(telemetry.normSuspensionTravel.frontLeft * 100)}%</span>
+                    <span className="suspTravelVal" style={{ fontSize: "9px" }}>WHL {Math.round(Math.abs(telemetry.wheelRotationSpeed.frontLeft * 9.5493))}RPM</span>
+                  </div>
                 </div>
 
                 {/* Chassis center */}
                 <div className="carChassisIllustration" />
 
                 {/* Front Right */}
-                <div className="tireBox">
-                  <div className="tireAndSuspension">
-                    <div className="suspensionBarContainer">
+                <div className="tireBox" style={{ flexDirection: "row-reverse" }}>
+                  <div className="tireGraphics">
+                    <div className="tireAndSuspension">
+                      <div className="rumbleBarContainer">
+                        <div className="rumbleFill" style={{ height: `${Math.min(telemetry.surfaceRumble.frontRight * 50, 100)}%` }} />
+                      </div>
                       <div 
-                        className="suspensionFill"
-                        style={{ height: `${Math.min(Math.max(telemetry.normSuspensionTravel.frontRight * 100, 0), 100)}%` }}
+                        className={getTireClasses('frontRight')} 
+                        style={{ backgroundColor: getTireTempColor(telemetry.tireTemp.frontRight) }} 
                       />
+                      <div className="suspensionBarContainer">
+                        <div 
+                          className="suspensionFill"
+                          style={{ height: `${Math.min(Math.max(telemetry.normSuspensionTravel.frontRight * 100, 0), 100)}%` }}
+                        />
+                      </div>
                     </div>
-                    <div 
-                      className="tireVisual" 
-                      style={{ backgroundColor: getTireTempColor(telemetry.tireTemp.frontRight) }} 
-                    />
+                    {/* 摩擦円 (トラクションサークル) */}
+                    <div className="tractionCircleContainer">
+                      <svg viewBox="0 0 100 100" className="tractionCircleSvg">
+                        <line x1="10" y1="50" x2="90" y2="50" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+                        <line x1="50" y1="10" x2="50" y2="90" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+                        <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeDasharray="3 3" />
+                        <circle cx={frTraction.x} cy={frTraction.y} r="6" className={`tractionDot ${frTraction.colorState}`} />
+                      </svg>
+                    </div>
                   </div>
-                  <span className="tireTempVal">{Math.round(telemetry.tireTemp.frontRight)}°C</span>
-                  <span className="suspTravelVal">SUSP {Math.round(telemetry.normSuspensionTravel.frontRight * 100)}%</span>
+                  <div className="tireStats" style={{ alignItems: "flex-end" }}>
+                    <span className="tireTempVal">{Math.round(telemetry.tireTemp.frontRight)}°C</span>
+                    <span className="suspTravelVal">SUSP {Math.round(telemetry.normSuspensionTravel.frontRight * 100)}%</span>
+                    <span className="suspTravelVal" style={{ fontSize: "9px" }}>WHL {Math.round(Math.abs(telemetry.wheelRotationSpeed.frontRight * 9.5493))}RPM</span>
+                  </div>
                 </div>
 
                 {/* Rear Left */}
                 <div className="tireBox">
-                  <div className="tireAndSuspension">
-                    <div className="suspensionBarContainer">
+                  <div className="tireGraphics">
+                    <div className="tireAndSuspension">
+                      <div className="suspensionBarContainer">
+                        <div 
+                          className="suspensionFill"
+                          style={{ height: `${Math.min(Math.max(telemetry.normSuspensionTravel.rearLeft * 100, 0), 100)}%` }}
+                        />
+                      </div>
                       <div 
-                        className="suspensionFill"
-                        style={{ height: `${Math.min(Math.max(telemetry.normSuspensionTravel.rearLeft * 100, 0), 100)}%` }}
+                        className={getTireClasses('rearLeft')} 
+                        style={{ backgroundColor: getTireTempColor(telemetry.tireTemp.rearLeft) }} 
                       />
+                      <div className="rumbleBarContainer">
+                        <div className="rumbleFill" style={{ height: `${Math.min(telemetry.surfaceRumble.rearLeft * 50, 100)}%` }} />
+                      </div>
                     </div>
-                    <div 
-                      className="tireVisual" 
-                      style={{ backgroundColor: getTireTempColor(telemetry.tireTemp.rearLeft) }} 
-                    />
+                    {/* 摩擦円 (トラクションサークル) */}
+                    <div className="tractionCircleContainer">
+                      <svg viewBox="0 0 100 100" className="tractionCircleSvg">
+                        <line x1="10" y1="50" x2="90" y2="50" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+                        <line x1="50" y1="10" x2="50" y2="90" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+                        <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeDasharray="3 3" />
+                        <circle cx={rlTraction.x} cy={rlTraction.y} r="6" className={`tractionDot ${rlTraction.colorState}`} />
+                      </svg>
+                    </div>
                   </div>
-                  <span className="tireTempVal">{Math.round(telemetry.tireTemp.rearLeft)}°C</span>
-                  <span className="suspTravelVal">SUSP {Math.round(telemetry.normSuspensionTravel.rearLeft * 100)}%</span>
+                  <div className="tireStats">
+                    <span className="tireTempVal">{Math.round(telemetry.tireTemp.rearLeft)}°C</span>
+                    <span className="suspTravelVal">SUSP {Math.round(telemetry.normSuspensionTravel.rearLeft * 100)}%</span>
+                    <span className="suspTravelVal" style={{ fontSize: "9px" }}>WHL {Math.round(Math.abs(telemetry.wheelRotationSpeed.rearLeft * 9.5493))}RPM</span>
+                  </div>
                 </div>
 
                 {/* Rear Right */}
-                <div className="tireBox">
-                  <div className="tireAndSuspension">
-                    <div className="suspensionBarContainer">
+                <div className="tireBox" style={{ flexDirection: "row-reverse" }}>
+                  <div className="tireGraphics">
+                    <div className="tireAndSuspension">
+                      <div className="rumbleBarContainer">
+                        <div className="rumbleFill" style={{ height: `${Math.min(telemetry.surfaceRumble.rearRight * 50, 100)}%` }} />
+                      </div>
                       <div 
-                        className="suspensionFill"
-                        style={{ height: `${Math.min(Math.max(telemetry.normSuspensionTravel.rearRight * 100, 0), 100)}%` }}
+                        className={getTireClasses('rearRight')} 
+                        style={{ backgroundColor: getTireTempColor(telemetry.tireTemp.rearRight) }} 
                       />
+                      <div className="suspensionBarContainer">
+                        <div 
+                          className="suspensionFill"
+                          style={{ height: `${Math.min(Math.max(telemetry.normSuspensionTravel.rearRight * 100, 0), 100)}%` }}
+                        />
+                      </div>
                     </div>
-                    <div 
-                      className="tireVisual" 
-                      style={{ backgroundColor: getTireTempColor(telemetry.tireTemp.rearRight) }} 
-                    />
+                    {/* 摩擦円 (トラクションサークル) */}
+                    <div className="tractionCircleContainer">
+                      <svg viewBox="0 0 100 100" className="tractionCircleSvg">
+                        <line x1="10" y1="50" x2="90" y2="50" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+                        <line x1="50" y1="10" x2="50" y2="90" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+                        <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeDasharray="3 3" />
+                        <circle cx={rrTraction.x} cy={rrTraction.y} r="6" className={`tractionDot ${rrTraction.colorState}`} />
+                      </svg>
+                    </div>
                   </div>
-                  <span className="tireTempVal">{Math.round(telemetry.tireTemp.rearRight)}°C</span>
-                  <span className="suspTravelVal">SUSP {Math.round(telemetry.normSuspensionTravel.rearRight * 100)}%</span>
+                  <div className="tireStats" style={{ alignItems: "flex-end" }}>
+                    <span className="tireTempVal">{Math.round(telemetry.tireTemp.rearRight)}°C</span>
+                    <span className="suspTravelVal">SUSP {Math.round(telemetry.normSuspensionTravel.rearRight * 100)}%</span>
+                    <span className="suspTravelVal" style={{ fontSize: "9px" }}>WHL {Math.round(Math.abs(telemetry.wheelRotationSpeed.rearRight * 9.5493))}RPM</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </section>
       </main>
+        <div className="panel" style={{ marginTop: "24px", padding: "16px" }}>
+          <TraceGraph history={traceHistory} />
+        </div>
+      </>
+      )}
+
+      {activeMode === "QUALIFY" && (
+        <main className="qualifyMode" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: "20px" }}>
+          <div style={{ fontSize: "160px", fontFamily: "var(--font-display)", fontWeight: 900, lineHeight: 1, color: "var(--color-neon-cyan)", textShadow: "0 0 40px rgba(0,229,255,0.4)" }}>
+            {formatTime(telemetry.currentLap)}
+          </div>
+          <div style={{ display: "flex", gap: "40px", marginTop: "20px" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "14px", color: "var(--color-text-muted)" }}>BEST LAP</div>
+              <div style={{ fontSize: "32px", fontFamily: "var(--font-display)", color: "var(--color-neon-green)" }}>{formatTime(telemetry.bestLap)}</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "14px", color: "var(--color-text-muted)" }}>SPEED</div>
+              <div style={{ fontSize: "32px", fontFamily: "var(--font-display)", color: "#fff" }}>{Math.round(telemetry.speedKmh)} <span style={{fontSize:"14px"}}>km/h</span></div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "14px", color: "var(--color-text-muted)" }}>GEAR</div>
+              <div style={{ fontSize: "32px", fontFamily: "var(--font-display)", color: "#fff" }}>{getGearLabel(telemetry.gear)}</div>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {activeMode === "RACE" && (
+        <main className="raceMode" style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "24px", marginTop: "24px" }}>
+          <section className="panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "400px" }}>
+            <TrackMap points={mapPoints} />
+          </section>
+          <section className="panel" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", background: "rgba(255,255,255,0.02)", borderRadius: "8px" }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "12px", color: "var(--color-text-muted)", marginBottom: "4px" }}>POS</div>
+                <div style={{ fontSize: "48px", fontFamily: "var(--font-display)", fontWeight: 900, color: "var(--color-neon-orange)", lineHeight: 1 }}>{telemetry.racePosition || "-"}</div>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "12px", color: "var(--color-text-muted)", marginBottom: "4px" }}>LAP</div>
+                <div style={{ fontSize: "48px", fontFamily: "var(--font-display)", fontWeight: 900, color: "var(--color-neon-cyan)", lineHeight: 1 }}>{telemetry.lapNumber || "-"}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", background: "rgba(255,255,255,0.02)", borderRadius: "8px" }}>
+               <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "12px", color: "var(--color-text-muted)", marginBottom: "4px" }}>FUEL</div>
+                <div style={{ fontSize: "32px", fontFamily: "var(--font-display)", fontWeight: 900, color: telemetry.fuel < 0.1 ? "var(--color-neon-red)" : "var(--color-neon-green)" }}>{Math.round(telemetry.fuel * 100)}%</div>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "12px", color: "var(--color-text-muted)", marginBottom: "4px" }}>FRONT TEMP</div>
+                <div style={{ fontSize: "32px", fontFamily: "var(--font-display)", fontWeight: 900, color: "#fff" }}>{Math.round((telemetry.tireTemp.frontLeft + telemetry.tireTemp.frontRight) / 2)}°C</div>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "12px", color: "var(--color-text-muted)", marginBottom: "4px" }}>REAR TEMP</div>
+                <div style={{ fontSize: "32px", fontFamily: "var(--font-display)", fontWeight: 900, color: "#fff" }}>{Math.round((telemetry.tireTemp.rearLeft + telemetry.tireTemp.rearRight) / 2)}°C</div>
+              </div>
+            </div>
+          </section>
+        </main>
+      )}
     </div>
   );
 }

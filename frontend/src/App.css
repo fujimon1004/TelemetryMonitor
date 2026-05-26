@@ -1,5 +1,5 @@
 .dashboardContainer {
-  max-width: 1440px;
+  max-width: 100%;
   margin: 0 auto;
   padding: 24px;
   display: flex;
@@ -87,7 +87,7 @@
 /* Dashboard Grid */
 .dashboardGrid {
   display: grid;
-  grid-template-columns: 300px 1fr 340px;
+  grid-template-columns: minmax(320px, 1.2fr) minmax(300px, 1fr) minmax(380px, 1.3fr);
   gap: 24px;
 }
 
@@ -152,7 +152,7 @@
 .pedalBarsContainer {
   display: flex;
   justify-content: space-around;
-  height: 200px;
+  height: 240px;
   padding-top: 10px;
 }
 
@@ -222,14 +222,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 450px;
+  min-height: 300px;
   position: relative;
 }
 
 .gaugeContainer {
   position: relative;
   width: 100%;
-  max-width: 440px;
+  max-width: 320px;
   aspect-ratio: 1;
   display: flex;
   align-items: center;
@@ -279,30 +279,30 @@
 
 .gearDisplay {
   font-family: var(--font-display);
-  font-size: 96px;
+  font-size: 80px;
   font-weight: 900;
   line-height: 1;
   color: #fff;
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
-  margin-bottom: -10px;
+  margin-bottom: -6px;
   transition: color 0.1s ease, text-shadow 0.1s ease;
 }
 
 .gearDisplay.shiftUp {
   color: var(--color-neon-cyan);
-  text-shadow: 0 0 25px var(--color-neon-cyan), 0 0 50px var(--color-neon-cyan);
+  text-shadow: 0 0 20px var(--color-neon-cyan), 0 0 40px var(--color-neon-cyan);
   animation: pulse 0.5s infinite alternate;
 }
 
 .gearDisplay.revLimit {
   color: var(--color-neon-magenta);
-  text-shadow: 0 0 25px var(--color-neon-magenta), 0 0 50px var(--color-neon-magenta);
+  text-shadow: 0 0 20px var(--color-neon-magenta), 0 0 40px var(--color-neon-magenta);
   animation: flashRed 0.15s infinite alternate;
 }
 
 .speedDisplay {
   font-family: var(--font-display);
-  font-size: 48px;
+  font-size: 40px;
   font-weight: 900;
   line-height: 1;
   color: var(--color-text-main);
@@ -370,13 +370,13 @@
   justify-content: center;
   align-items: center;
   position: relative;
-  height: 180px;
+  height: 220px;
   width: 100%;
 }
 
 .gforceGrid {
-  width: 150px;
-  height: 150px;
+  width: 190px;
+  height: 190px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.05);
   position: relative;
@@ -447,9 +447,9 @@
 
 .carGrid {
   display: grid;
-  grid-template-columns: 70px 60px 70px;
-  grid-template-rows: 90px 90px;
-  gap: 12px;
+  grid-template-columns: 150px 60px 150px;
+  grid-template-rows: auto auto;
+  gap: 16px;
   align-items: center;
   justify-items: center;
 }
@@ -457,20 +457,21 @@
 .carChassisIllustration {
   grid-column: 2;
   grid-row: 1 / span 2;
-  width: 44px;
-  height: 140px;
+  width: 50px;
+  height: 100%;
+  min-height: 280px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
+  border-radius: 24px;
   position: relative;
 }
 
 .carChassisIllustration::before {
   content: "";
   position: absolute;
-  top: 30px;
-  left: -8px;
-  right: -8px;
+  top: 45px;
+  left: -10px;
+  right: -10px;
   height: 2px;
   background: rgba(255, 255, 255, 0.08);
 }
@@ -478,23 +479,39 @@
 .carChassisIllustration::after {
   content: "";
   position: absolute;
-  bottom: 30px;
-  left: -8px;
-  right: -8px;
+  bottom: 45px;
+  left: -10px;
+  right: -10px;
   height: 2px;
   background: rgba(255, 255, 255, 0.08);
 }
 
 .tireBox {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 12px;
   background: rgba(255, 255, 255, 0.01);
   border: 1px solid rgba(255, 255, 255, 0.03);
-  padding: 6px;
+  padding: 12px;
   border-radius: 8px;
   width: 100%;
+  box-sizing: border-box;
+}
+
+.tireGraphics {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.tireStats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .tireAndSuspension {
@@ -505,11 +522,11 @@
 }
 
 .suspensionBarContainer {
-  width: 6px;
-  height: 42px;
+  width: 8px;
+  height: 56px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  border-radius: 4px;
   display: flex;
   align-items: flex-end;
   overflow: hidden;
@@ -522,22 +539,22 @@
 }
 
 .tireVisual {
-  width: 24px;
-  height: 42px;
-  border-radius: 6px;
+  width: 32px;
+  height: 56px;
+  border-radius: 8px;
   border: 1.5px solid rgba(0, 0, 0, 0.3);
   transition: background-color 0.3s ease;
-  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .tireTempVal {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .suspTravelVal {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-muted);
 }
 
@@ -561,3 +578,127 @@
 .badge-s2 { background-color: #8b5cf6; color: #fff; }
 .badge-x { background-color: #10b981; color: #fff; }
 .badge-default { background-color: #333; color: #fff; }
+
+/* -------------------------------------------
+   Phase 8 Advanced UI
+------------------------------------------- */
+
+/* Steering UI */
+.steeringContainer {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.steeringHeader {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-display);
+}
+.steeringLabel { font-size: 10px; color: var(--color-text-muted); font-weight: 700; }
+.steeringValue { font-size: 12px; font-weight: 700; color: var(--color-text-main); }
+.steeringTrack {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.steeringFill {
+  position: absolute;
+  height: 100%;
+  top: 0;
+  transition: all 0.05s linear;
+}
+.steeringCenterMark {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #fff;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+/* Advanced Tire Effects */
+.rumbleBarContainer {
+  width: 6px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.rumbleFill {
+  width: 100%;
+  background: #795548;
+  transition: height 0.05s linear;
+}
+
+.tireVisual.puddle {
+  box-shadow: 0 0 10px rgba(0, 150, 255, 0.8), inset 0 0 8px rgba(0, 0, 0, 0.5);
+  border-color: #0096ff;
+}
+.tireVisual.rumble {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 4px,
+    rgba(255, 255, 255, 0.3) 4px,
+    rgba(255, 255, 255, 0.3) 8px
+  );
+}
+.tireVisual.slip {
+  border-color: var(--color-neon-orange);
+  box-shadow: 0 0 10px var(--color-neon-orange), inset 0 0 8px rgba(0, 0, 0, 0.5);
+  animation: pulseWarning 0.2s infinite alternate;
+}
+.tireVisual.severe-slip {
+  border-color: var(--color-neon-red);
+  box-shadow: 0 0 15px var(--color-neon-red), inset 0 0 8px rgba(0, 0, 0, 0.5);
+  animation: pulseDanger 0.1s infinite alternate;
+}
+
+@keyframes pulseWarning {
+  0% { box-shadow: 0 0 5px var(--color-neon-orange), inset 0 0 8px rgba(0, 0, 0, 0.5); }
+  100% { box-shadow: 0 0 15px var(--color-neon-orange), inset 0 0 8px rgba(0, 0, 0, 0.5); }
+}
+@keyframes pulseDanger {
+  0% { box-shadow: 0 0 5px var(--color-neon-red), inset 0 0 8px rgba(0, 0, 0, 0.5); }
+  100% { box-shadow: 0 0 25px var(--color-neon-red), inset 0 0 8px rgba(0, 0, 0, 0.5); }
+}
+
+/* 摩擦円 (トラクションサークル) */
+.tractionCircleContainer {
+  width: 52px;
+  height: 52px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0;
+}
+.tractionCircleSvg {
+  width: 100%;
+  height: 100%;
+}
+.tractionDot {
+  transition: cx 0.05s ease-out, cy 0.05s ease-out, fill 0.1s ease;
+}
+.tractionDot.safe {
+  fill: var(--color-neon-green);
+  filter: drop-shadow(0 0 4px var(--color-neon-green));
+}
+.tractionDot.warning {
+  fill: var(--color-neon-orange);
+  filter: drop-shadow(0 0 6px var(--color-neon-orange));
+}
+.tractionDot.danger {
+  fill: var(--color-neon-red);
+  filter: drop-shadow(0 0 8px var(--color-neon-red));
+}

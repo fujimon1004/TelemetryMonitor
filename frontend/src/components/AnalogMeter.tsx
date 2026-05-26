@@ -79,8 +79,8 @@ export const AnalogMeter: React.FC<AnalogMeterProps> = ({
   const textRadius = size * 0.30;
 
   return (
-    <div className="analogMeterContainer" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div className="analogMeterContainer" style={{ width: "100%", aspectRatio: "1" }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`}>
         {/* 背景のリング */}
         <circle 
           cx={cx} cy={cy} r={radius} 
